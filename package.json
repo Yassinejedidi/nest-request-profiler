@@ -68,5 +68,9 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+    "repository": {
+    "type": "git",
+    "url": "https://github.com/Yassinejedidi/nest-request-profiler"
   }
 }
