@@ -1,4 +1,4 @@
-# 🔍 @jdidi/request-profiler
+# 🔍 nest-request-profiler
 
 A lightweight request profiling middleware for [NestJS](https://nestjs.com/) applications with a built-in live dashboard.
 
@@ -12,13 +12,13 @@ A lightweight request profiling middleware for [NestJS](https://nestjs.com/) app
 ## 📦 Installation
 
 ```bash
-npm install @jdidi/request-profiler
+npm install nest-request-profiler
 ```
 
 or
 
 ```bash
-yarn add @jdidi/request-profiler
+yarn add nest-request-profiler
 ```
 
 ---
@@ -31,7 +31,7 @@ In your main application module (`AppModule` or any other):
 
 ```ts
 import { Module } from '@nestjs/common';
-import { RequestProfilerModule } from '@jdidi/request-profiler';
+import { RequestProfilerModule } from 'nest-request-profiler';
 
 @Module({
   imports: [RequestProfilerModule],
@@ -116,7 +116,7 @@ Then link it in another NestJS app:
 ```bash
 npm link
 # in your other NestJS app:
-npm link @jdidi/request-profiler
+npm link nest-request-profiler
 ```
 
 ---
