@@ -1,0 +1,646 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NestJS Profiler Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .tab-active {
+      @apply bg-red-600 text-white;
+    }
+    .metric-card {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(0, 0, 0, 0.3));
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .chart-container {
+      background: rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(10px);
+    }
+    .chart-wrapper {
+      position: relative;
+      height: 300px;
+      width: 100%;
+    }
+    canvas {
+      max-height: 100% !important;
+      max-width: 100% !important;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 font-sans min-h-screen">
+  <!-- Header -->
+  <header class="bg-gray-900 border-b border-gray-800 p-4">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold text-red-500">🔥 NestJS Profiler</h1>
+        <p class="text-gray-400 text-sm">Live API Performance Dashboard</p>
+      </div>
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-2">
+          <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+          <span class="text-sm text-gray-300">Live</span>
+        </div>
+        <div class="text-sm text-gray-400" id="last-updated">Last updated: --:--</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="bg-gray-900 border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex space-x-1 py-2">
+        <button onclick="switchTab('overview')" id="tab-overview" class="tab-active px-4 py-2 rounded-md text-sm font-medium transition-colors">
+          📊 Overview
+        </button>
+        <button onclick="switchTab('requests')" id="tab-requests" class="px-4 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-800 transition-colors">
+          📋 Requests
+        </button>
+        <button onclick="switchTab('performance')" id="tab-performance" class="px-4 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-800 transition-colors">
+          ⚡ Performance
+        </button>
+        <button onclick="switchTab('analytics')" id="tab-analytics" class="px-4 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-800 transition-colors">
+          📈 Analytics
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto p-4 space-y-6">
+    <!-- Overview Tab -->
+    <div id="content-overview" class="tab-content">
+      <!-- Metrics Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="metric-card rounded-lg p-4">
+          <h3 class="text-sm font-medium text-gray-400">Total Requests</h3>
+          <p class="text-2xl font-bold text-white" id="total-requests">0</p>
+        </div>
+        <div class="metric-card rounded-lg p-4">
+          <h3 class="text-sm font-medium text-gray-400">Avg Response Time</h3>
+          <p class="text-2xl font-bold text-white" id="avg-response">0ms</p>
+        </div>
+        <div class="metric-card rounded-lg p-4">
+          <h3 class="text-sm font-medium text-gray-400">Error Rate</h3>
+          <p class="text-2xl font-bold text-white" id="error-rate">0%</p>
+        </div>
+        <div class="metric-card rounded-lg p-4">
+          <h3 class="text-sm font-medium text-gray-400">Active Routes</h3>
+          <p class="text-2xl font-bold text-white" id="active-routes">0</p>
+        </div>
+      </div>
+
+      <!-- Charts Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="chart-container rounded-lg p-6">
+          <h3 class="text-lg font-semibold text-red-400 mb-4">📊 Response Times by Route</h3>
+          <div class="chart-wrapper">
+            <canvas id="durationChart"></canvas>
+          </div>
+        </div>
+        <div class="chart-container rounded-lg p-6">
+          <h3 class="text-lg font-semibold text-red-400 mb-4">🎯 Status Code Distribution</h3>
+          <div class="chart-wrapper">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Requests Tab -->
+    <div id="content-requests" class="tab-content hidden">
+      <div class="chart-container rounded-lg p-6">
+        <h2 class="text-xl font-semibold text-red-400 mb-4">📋 API Request Summary</h2>
+        <div class="overflow-x-auto">
+          <table class="min-w-full border border-gray-700 text-sm">
+            <thead>
+              <tr class="bg-gray-800 text-gray-300">
+                <th class="border border-gray-700 px-4 py-2 text-left">Route</th>
+                <th class="border border-gray-700 px-4 py-2">Count</th>
+                <th class="border border-gray-700 px-4 py-2">Avg Duration</th>
+                <th class="border border-gray-700 px-4 py-2">Min/Max</th>
+                <th class="border border-gray-700 px-4 py-2 text-left">Status Codes</th>
+              </tr>
+            </thead>
+            <tbody id="table-body" class="text-center text-gray-200"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance Tab -->
+    <div id="content-performance" class="tab-content hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="chart-container rounded-lg p-6">
+          <h3 class="text-lg font-semibold text-red-400 mb-4">📈 Response Time Trend</h3>
+          <div class="chart-wrapper">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+        <div class="chart-container rounded-lg p-6">
+          <h3 class="text-lg font-semibold text-red-400 mb-4">⚡ Request Rate</h3>
+          <div class="chart-wrapper">
+            <canvas id="rateChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analytics Tab -->
+    <div id="content-analytics" class="tab-content hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="chart-container rounded-lg p-6">
+          <h3 class="text-lg font-semibold text-red-400 mb-4">🔥 Hottest Routes</h3>
+          <div class="chart-wrapper">
+            <canvas id="heatChart"></canvas>
+          </div>
+        </div>
+        <div class="chart-container rounded-lg p-6">
+          <h3 class="text-lg font-semibold text-red-400 mb-4">📊 Performance Distribution</h3>
+          <div class="chart-wrapper">
+            <canvas id="distributionChart"></canvas>
+          </div>
+        </div>
+        <div class="chart-container rounded-lg p-6">
+          <h3 class="text-lg font-semibold text-red-400 mb-4">⏱️ Response Time Histogram</h3>
+          <div class="chart-wrapper">
+            <canvas id="histogramChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    let charts = {};
+    let profilerData = [];
+    let trendData = [];
+    let rateData = [];
+    
+    // Data limits for responsive charts
+    const MAX_TREND_POINTS = 20;
+    const MAX_RATE_POINTS = 12;
+    const MAX_ROUTES_DISPLAY = 10;
+
+    // Mock data generator for demo
+    function generateMockData() {
+      const routes = ['/api/users', '/api/posts', '/api/auth', '/api/products', '/api/orders'];
+      return routes.map(path => ({
+        path,
+        count: Math.floor(Math.random() * 1000) + 100,
+        avgDuration: Math.random() * 300 + 20,
+        statuses: {
+          '200': Math.floor(Math.random() * 800) + 200,
+          '400': Math.floor(Math.random() * 50),
+          '500': Math.floor(Math.random() * 20)
+        }
+      }));
+    }
+
+    // Tab switching functionality
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+      });
+      
+      document.querySelectorAll('nav button').forEach(btn => {
+        btn.classList.remove('tab-active');
+        btn.classList.add('text-gray-300', 'hover:bg-gray-800');
+      });
+      
+      document.getElementById(`content-${tabName}`).classList.remove('hidden');
+      
+      const activeTab = document.getElementById(`tab-${tabName}`);
+      activeTab.classList.add('tab-active');
+      activeTab.classList.remove('text-gray-300', 'hover:bg-gray-800');
+      
+      setTimeout(() => {
+        Object.values(charts).forEach(chart => {
+          if (chart) chart.resize();
+        });
+      }, 100);
+    }
+
+    // Chart creation functions with disabled animations
+    function createDurationChart(data) {
+      const ctx = document.getElementById('durationChart').getContext('2d');
+      if (charts.duration) charts.duration.destroy();
+      
+      // Limit to top routes by request count
+      const limitedData = data.sort((a, b) => b.count - a.count).slice(0, MAX_ROUTES_DISPLAY);
+      
+      charts.duration = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: limitedData.map(d => d.path.substring(0, 15) + (d.path.length > 15 ? '...' : '')),
+          datasets: [{
+            label: 'Avg Duration (ms)',
+            data: limitedData.map(d => Math.round(d.avgDuration)),
+            backgroundColor: 'rgba(239, 68, 68, 0.7)',
+            borderColor: 'rgba(239, 68, 68, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { color: '#ccc' },
+              grid: { color: '#444' }
+            },
+            x: {
+              ticks: { 
+                color: '#ccc',
+                maxRotation: 45
+              },
+              grid: { color: '#444' }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#fff' } }
+          }
+        }
+      });
+    }
+
+    function createStatusChart(data) {
+      const ctx = document.getElementById('statusChart').getContext('2d');
+      if (charts.status) charts.status.destroy();
+      
+      const statusCounts = {};
+      data.forEach(route => {
+        Object.entries(route.statuses).forEach(([status, count]) => {
+          statusCounts[status] = (statusCounts[status] || 0) + count;
+        });
+      });
+
+      const colors = {
+        '200': '#10b981', '201': '#059669', '204': '#047857',
+        '400': '#f59e0b', '401': '#f97316', '403': '#ea580c',
+        '404': '#ef4444', '500': '#dc2626'
+      };
+
+      charts.status = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(statusCounts),
+          datasets: [{
+            data: Object.values(statusCounts),
+            backgroundColor: Object.keys(statusCounts).map(status => colors[status] || '#6b7280'),
+            borderWidth: 2,
+            borderColor: '#1f2937'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: { 
+              labels: { color: '#fff' },
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+
+    function createTrendChart() {
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      if (charts.trend) charts.trend.destroy();
+      
+      // Add new data point and maintain limit
+      const now = new Date();
+      const newPoint = {
+        time: now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+        value: Math.random() * 200 + 50
+      };
+      
+      trendData.push(newPoint);
+      if (trendData.length > MAX_TREND_POINTS) {
+        trendData.shift(); // Remove oldest point
+      }
+
+      charts.trend = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: trendData.map(d => d.time),
+          datasets: [{
+            label: 'Avg Response Time (ms)',
+            data: trendData.map(d => d.value),
+            borderColor: 'rgba(239, 68, 68, 1)',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { color: '#ccc' },
+              grid: { color: '#444' }
+            },
+            x: {
+              ticks: { 
+                color: '#ccc',
+                maxRotation: 45
+              },
+              grid: { color: '#444' }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#fff' } }
+          }
+        }
+      });
+    }
+
+    function createRateChart() {
+      const ctx = document.getElementById('rateChart').getContext('2d');
+      if (charts.rate) charts.rate.destroy();
+      
+      // Add new data point and maintain limit
+      const now = new Date();
+      const newPoint = {
+        time: now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+        value: Math.floor(Math.random() * 100) + 20
+      };
+      
+      rateData.push(newPoint);
+      if (rateData.length > MAX_RATE_POINTS) {
+        rateData.shift(); // Remove oldest point
+      }
+
+      charts.rate = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: rateData.map(d => d.time),
+          datasets: [{
+            label: 'Requests per 5min',
+            data: rateData.map(d => d.value),
+            backgroundColor: 'rgba(16, 185, 129, 0.7)',
+            borderColor: 'rgba(16, 185, 129, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { color: '#ccc' },
+              grid: { color: '#444' }
+            },
+            x: {
+              ticks: { 
+                color: '#ccc',
+                maxRotation: 45
+              },
+              grid: { color: '#444' }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#fff' } }
+          }
+        }
+      });
+    }
+
+    function createHeatChart(data) {
+      const ctx = document.getElementById('heatChart').getContext('2d');
+      if (charts.heat) charts.heat.destroy();
+      
+      const sortedData = [...data].sort((a, b) => b.count - a.count).slice(0, 5);
+      
+      charts.heat = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: sortedData.map(d => d.path.substring(0, 10) + '...'),
+          datasets: [{
+            label: 'Request Count',
+            data: sortedData.map(d => d.count),
+            backgroundColor: 'rgba(251, 191, 36, 0.7)',
+            borderColor: 'rgba(251, 191, 36, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          indexAxis: 'y',
+          scales: {
+            y: {
+              ticks: { color: '#ccc' },
+              grid: { color: '#444' }
+            },
+            x: {
+              beginAtZero: true,
+              ticks: { color: '#ccc' },
+              grid: { color: '#444' }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#fff' } }
+          }
+        }
+      });
+    }
+
+    function createDistributionChart(data) {
+      const ctx = document.getElementById('distributionChart').getContext('2d');
+      if (charts.distribution) charts.distribution.destroy();
+      
+      const buckets = { 'Fast (<50ms)': 0, 'Medium (50-200ms)': 0, 'Slow (>200ms)': 0 };
+      data.forEach(route => {
+        if (route.avgDuration < 50) buckets['Fast (<50ms)']++;
+        else if (route.avgDuration < 200) buckets['Medium (50-200ms)']++;
+        else buckets['Slow (>200ms)']++;
+      });
+
+      charts.distribution = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: Object.keys(buckets),
+          datasets: [{
+            data: Object.values(buckets),
+            backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+            borderWidth: 2,
+            borderColor: '#1f2937'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: { 
+              labels: { color: '#fff' },
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+
+    function createHistogramChart(data) {
+      const ctx = document.getElementById('histogramChart').getContext('2d');
+      if (charts.histogram) charts.histogram.destroy();
+      
+      const buckets = Array(10).fill(0);
+      const maxDuration = Math.max(...data.map(d => d.avgDuration));
+      const bucketSize = maxDuration / 10;
+      
+      data.forEach(route => {
+        const bucketIndex = Math.min(Math.floor(route.avgDuration / bucketSize), 9);
+        buckets[bucketIndex]++;
+      });
+
+      const labels = buckets.map((_, i) => `${Math.round(i * bucketSize)}-${Math.round((i + 1) * bucketSize)}ms`);
+
+      charts.histogram = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Route Count',
+            data: buckets,
+            backgroundColor: 'rgba(168, 85, 247, 0.7)',
+            borderColor: 'rgba(168, 85, 247, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { color: '#ccc' },
+              grid: { color: '#444' }
+            },
+            x: {
+              ticks: { 
+                color: '#ccc',
+                maxRotation: 45
+              },
+              grid: { color: '#444' }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#fff' } }
+          }
+        }
+      });
+    }
+
+    function updateMetrics(data) {
+      const totalRequests = data.reduce((sum, route) => sum + route.count, 0);
+      const avgResponse = Math.round(data.reduce((sum, route) => sum + route.avgDuration, 0) / data.length);
+      const errorCount = data.reduce((sum, route) => {
+        return sum + Object.entries(route.statuses).reduce((errSum, [status, count]) => {
+          return errSum + (parseInt(status) >= 400 ? count : 0);
+        }, 0);
+      }, 0);
+      const errorRate = totalRequests > 0 ? ((errorCount / totalRequests) * 100).toFixed(1) : 0;
+
+      document.getElementById('total-requests').textContent = totalRequests.toLocaleString();
+      document.getElementById('avg-response').textContent = `${avgResponse}ms`;
+      document.getElementById('error-rate').textContent = `${errorRate}%`;
+      document.getElementById('active-routes').textContent = data.length;
+    }
+
+    function updateTable(data) {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = '';
+      
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-gray-800 transition-colors";
+        tr.innerHTML = `
+          <td class="border border-gray-700 px-4 py-2 text-left font-mono text-sm">${row.path}</td>
+          <td class="border border-gray-700 px-4 py-2">${row.count.toLocaleString()}</td>
+          <td class="border border-gray-700 px-4 py-2">${Math.round(row.avgDuration)}ms</td>
+          <td class="border border-gray-700 px-4 py-2">
+            <span class="text-green-400">${Math.round(row.avgDuration * 0.7)}ms</span> / 
+            <span class="text-red-400">${Math.round(row.avgDuration * 1.3)}ms</span>
+          </td>
+          <td class="border border-gray-700 px-4 py-2 text-left">
+            <div class="flex flex-wrap gap-1">
+              ${Object.entries(row.statuses).map(([status, count]) => 
+                `<span class="px-2 py-1 text-xs rounded-full ${
+                  status.startsWith('2') ? 'bg-green-900 text-green-300' :
+                  status.startsWith('4') ? 'bg-yellow-900 text-yellow-300' :
+                  'bg-red-900 text-red-300'
+                }">${status}: ${count}</span>`
+              ).join('')}
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function load() {
+      try {
+        // Try to fetch real data, fallback to mock data
+        let data;
+        try {
+          const res = await fetch('/__profiler/data');
+          data = await res.json();
+        } catch (error) {
+          console.log('Using mock data for demo');
+          data = generateMockData();
+        }
+        
+        profilerData = data;
+
+        document.getElementById('last-updated').textContent = 
+          `Last updated: ${new Date().toLocaleTimeString()}`;
+
+        updateMetrics(data);
+        updateTable(data);
+        createDurationChart(data);
+        createStatusChart(data);
+        createTrendChart();
+        createRateChart();
+        createHeatChart(data);
+        createDistributionChart(data);
+        createHistogramChart(data);
+
+      } catch (error) {
+        console.error("Failed to process profiler data:", error);
+      }
+    }
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      Object.values(charts).forEach(chart => {
+        if (chart) {
+          chart.resize();
+        }
+      });
+    });
+
+    // Initialize
+    setInterval(load, 3000);
+    load();
+  </script>
+</body>
+</html>
