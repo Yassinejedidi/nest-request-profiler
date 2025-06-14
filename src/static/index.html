@@ -552,7 +552,9 @@
 
     function updateMetrics(data) {
       const totalRequests = data.reduce((sum, route) => sum + route.count, 0);
-      const avgResponse = Math.round(data.reduce((sum, route) => sum + route.avgDuration, 0) / data.length);
+const avgResponse = data.length > 0
+  ? Math.round(data.reduce((sum, route) => sum + route.avgDuration, 0) / data.length)
+  : 0;
       const errorCount = data.reduce((sum, route) => {
         return sum + Object.entries(route.statuses).reduce((errSum, [status, count]) => {
           return errSum + (parseInt(status) >= 400 ? count : 0);
